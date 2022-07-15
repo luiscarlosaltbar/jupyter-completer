@@ -1,4 +1,4 @@
-# Making a new release of jupyterlab_examples_completer
+# Making a new release of jupyterlab_completer
 
 The extension can be published to `PyPI` and `npm` using the [Jupyter Releaser](https://github.com/jupyter-server/jupyter_releaser).
 

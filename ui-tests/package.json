@@ -1,8 +1,8 @@
 {
-  "name": "@jupyterlab-examples/completer-tests",
+  "name": "jupyterlab-completer-tests",
   "version": "0.1.0",
-  "description": "Integration test for completer example",
-  "repository": "https://github.com/jupyterlab/extension-examples",
+  "description": "Integration test for completer",
+  "repository": "",
   "author": "Project Jupyter Contributors",
   "license": "BSD-3-Clause",
   "private": true,

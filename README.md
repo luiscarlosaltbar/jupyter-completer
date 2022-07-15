@@ -1,219 +1,106 @@
-# Custom Completer
+# JupyterLab Completer
 
-> Provide a connector to customize tab completion results in a notebook.
+## TL;DR
 
-- [Code structure](#code-structure)
-- [Creating a custom connector](#creating-a-custom-connector)
-- [Aggregating connector responses](#aggregating-connector-responses)
-- [Disabling a JupyterLab plugin](#disabling-a-jupyterlab-plugin)
-- [Asynchronous extension initialization](#asynchronous-extension-initialization)
-- [Where to go next](#where-to-go-next)
+To get started:
 
-![Custom completion](preview.png)
+```bash
+# create a new environment
+conda env create
 
-In this example, you will learn how to customize the behavior of JupyterLab notebooks' tab completion.
+# activate the environment
+conda activate jupyterlab-completer
 
-## Code structure
+# install the extension in editable mode
+python -m pip install -e .
 
-The code is split into three parts:
+# install your development version of the extension with JupyterLab
+jupyter labextension develop . --overwrite
 
-1.  the JupyterLab plugin that activates all the extension components and connects
-    them to the main _JupyterLab_ application via commands,
-2.  a custom `CompletionConnector`, adapted from [jupyterlab/packages/completer/src/connector.ts](https://github.com/jupyterlab/jupyterlab/blob/v3.0.0/packages/completer/src/connector.ts),
-    that aggregates completion results from three sources: _JupyterLab_'s existing `KernelConnector` and `ContextConnector`, plus...
-3.  `CustomConnector`, a lightweight source of mocked completion results.
+# build the TypeScript source after making changes
+jlpm run build
 
-The first part is contained in the `index.ts` file, the second is in `connector.ts`, and the third is in `customconnector.ts`.
-
-## Creating a custom DataConnector
-
-`src/customconnector.ts` defines a `CustomConnector` to generate mock autocomplete suggestions. Like the `ContextConnector` it is based on, `CustomConnector` extends _JupyterLab_'s abstract [`DataConnector`](https://jupyterlab.readthedocs.io/en/latest/api/classes/statedb.DataConnector.html) class.
-
-The only abstract method in `DataConnector` is `fetch`, which must be implemented in your `CustomConnector`.
-
-```ts
-// src/customconnector.ts#L28-L43
-
-/**
- * Fetch completion requests.
- *
- * @param request - The completion request text and details.
- * @returns Completion reply
- */
-fetch(
-  request: CompletionHandler.IRequest
-): Promise<CompletionHandler.IReply> {
-  if (!this._editor) {
-    return Promise.reject('No editor');
-  }
-  return new Promise<CompletionHandler.IReply>((resolve) => {
-    resolve(Private.completionHint(this._editor));
-  });
-}
+# start JupyterLab
+jupyter lab
 ```
 
-This calls a private `completionHint` function, which, like `ContextConnector`'s `contextHint` function, uses the `CodeEditor.IEditor` widget to determine the token to suggest matches for.
+The extension currently target **JupyterLab 3.1 or later**.
 
-```ts
-// src/customconnector.ts#L73-L78
+## Prerequisites
 
-export function completionHint(
-  editor: CodeEditor.IEditor
-): CompletionHandler.IReply {
-  // Find the token at the cursor
-  const cursor = editor.getCursorPosition();
-  const token = editor.getTokenForPosition(cursor);
+Writing an extension requires basic knowledge of JavaScript, Typescript and potentially Python.
+
+_Don't be scared of Typescript, even if you never coded in TypeScript before you touch
+JupyterLab you may find it easier to understand than pure JavaScript if you have a
+basic understanding of object oriented programming and types._
+
+You can create a [conda](https://docs.conda.io/en/latest/miniconda.html) environment to get started
+after cloning this repository.
+
+```bash
+conda env create && \
+  conda activate jupyterlab-completer
 ```
 
-A list of mock completion tokens is then created to return as `matches` in the `CompletionHandler.IReply` response.
+## Develop and Use the Extension
 
-<!-- prettier-ignore-start -->
-```ts
-// src/customconnector.ts#L80-L97
-
-// Create a list of matching tokens.
-const tokenList = [
-  { value: token.value + 'Magic', offset: token.offset, type: 'magic' },
-  { value: token.value + 'Science', offset: token.offset, type: 'science' },
-  { value: token.value + 'Neither', offset: token.offset },
-];
-
-// Only choose the ones that have a non-empty type field, which are likely to be of interest.
-const completionList = tokenList.filter((t) => t.type).map((t) => t.value);
-// Remove duplicate completions from the list
-const matches = Array.from(new Set<string>(completionList));
-
-return {
-  start: token.offset,
-  end: token.offset + token.value.length,
-  matches,
-  metadata: {},
-};
-```
-<!-- prettier-ignore-end -->
-
-## Aggregating connector responses
-
-[_JupyterLab_'s `CompletionConnector`](https://github.com/jupyterlab/jupyterlab/blob/v3.0.0/packages/completer/src/connector.ts) fetches and merges completion responses from `KernelConnector` and `ContextConnector`. The modified `CompletionConnector` in `src/connector.ts` is more general; given an array of `DataConnectors`, it can fetch and merge completion matches from every connector provided.
-
-```ts
-// src/connector.ts#L33-L50
-
-/**
- * Fetch completion requests.
- *
- * @param request - The completion request text and details.
- * @returns Completion reply
- */
-fetch(
-  request: CompletionHandler.IRequest
-): Promise<CompletionHandler.IReply> {
-  return Promise.all(
-    this._connectors.map((connector) => connector.fetch(request))
-  ).then((replies) => {
-    const definedReplies = replies.filter(
-      (reply): reply is CompletionHandler.IReply => !!reply
-    );
-    return Private.mergeReplies(definedReplies);
-  });
-}
+```bash
+pip install -e .
+jupyter labextension develop . --overwrite
 ```
 
-## Disabling a JupyterLab plugin
+Rebuild the extension:
 
-[_JupyterLab_'s completer-extension](https://github.com/jupyterlab/jupyterlab/tree/v3.0.0/packages/completer-extension) includes a notebooks plugin that registers notebooks for code completion. Your extension will override the notebooks plugin's behavior, so you can [disable notebooks](https://jupyterlab.readthedocs.io/en/stable/extension/extension_dev.html#disabling-other-extensions) in your `.package.json`:
-
-```json5
-// package.json#L81-L88
-
-"jupyterlab": {
-  "extension": true,
-  "schemaDir": "schema",
-  "outputDir": "jupyterlab_examples_completer/labextension",
-  "disabledExtensions": [
-    "@jupyterlab/completer-extension:notebooks"
-  ]
-},
+```bash
+jlpm run build
 ```
 
-## Asynchronous extension initialization
+You can now start JupyterLab and check if your extension is working fine:
 
-`index.ts` contains the code to initialize this extension. Nearly all of the code in `index.ts` is copied directly from the notebooks plugin.
-
-Note that the extension commands you're overriding are unified into one namespace at the top of the file:
-
-```ts
-// src/index.ts#L21-L29
-
-namespace CommandIDs {
-  export const invoke = 'completer:invoke';
-
-  export const invokeNotebook = 'completer:invoke-notebook';
-
-  export const select = 'completer:select';
-
-  export const selectNotebook = 'completer:select-notebook';
-}
+```bash
+jupyter lab
 ```
 
-`index.ts` imports four connector classes, two from `JupyterLab`:
+### Change the Sources
 
-<!-- prettier-ignore-start -->
-```ts
-// src/index.ts#L6-L10
+If you want to develop and iterate on the code, you will need to open 2 terminals.
 
-import {
-  ContextConnector,
-  ICompletionManager,
-  KernelConnector,
-} from '@jupyterlab/completer';
-```
-<!-- prettier-ignore-end -->
+In terminal 1, go to the extension folder and run the following:
 
-and two from this extension:
-
-```ts
-// src/index.ts#L14-L16
-
-import { CompletionConnector } from './connector';
-
-import { CustomConnector } from './customconnector';
+```bash
+jlpm watch
 ```
 
-Just like the notebooks plugin, when you update the handler for a notebook call `updateConnector`:
+Then in terminal 2, start JupyterLab with the watch flag:
 
-```ts
-// src/index.ts#L74-L76
-
-// Update the handler whenever the prompt or session changes
-panel.content.activeCellChanged.connect(updateConnector);
-panel.sessionContext.sessionChanged.connect(updateConnector);
+```bash
+jupyter lab --watch
 ```
 
-which, unlike the notebooks plugin, instantiates `KernelConnector`, `ContextConnector`, and `CustomConnector`, then passes them to your modified `CompletionConnector`:
+From there, you can change your extension source code, it will be recompiled,
+and you can refresh your browser to see your changes.
 
-<!-- prettier-ignore-start -->
-```ts
-// src/index.ts#L58-L72
+We are using [embedme](https://github.com/zakhenry/embedme) to embed code snippets into the markdown READMEs. If you make changes to the source code, ensure you update the README and run `jlpm embedme` from the root of the repository to regenerate the READMEs.
 
-const updateConnector = () => {
-  editor = panel.content.activeCell?.editor ?? null;
-  options.session = panel.sessionContext.session;
-  options.editor = editor;
-  handler.editor = editor;
+## Test the Extension
 
-  const kernel = new KernelConnector(options);
-  const context = new ContextConnector(options);
-  const custom = new CustomConnector(options);
-  handler.connector = new CompletionConnector([
-    kernel,
-    context,
-    custom,
-  ]);
-};
+The extension are automatically tested for:
+
+- Homogeneous configuration:  
+  Configuration files are compared to the reference ones
+- TypeScript code lint
+- Installation in JupyterLab:  
+  The installation is checked by listing the installed extension and running JupyterLab with the helper `python -m jupyterlab.browser_check`
+- Integration test:  
+  Those tests are emulating user action in JupyterLab to check the extension is behaving as expected.  
+  The tests are defined in the `ui-tests` subfolder within the extension.
+  This is possible thanks to a tool called [playwright](https://playwright.dev/).
+
+## Install a Published Extension
+
+Once your extension is published on [pypi.org](https://pypi.org/) (outside of this scope), you can install it
+with the following command:
+
+```bash
+pip install <published_extension>
 ```
-<!-- prettier-ignore-end -->
-
-## Where to go next
-
-Create a [server extension](../server-extension) to serve up custom completion matches.

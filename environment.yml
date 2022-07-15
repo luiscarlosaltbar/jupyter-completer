@@ -1,4 +1,4 @@
-name: jupyterlab-extension-examples
+name: jupyterlab-completer
 channels:
   - conda-forge
 dependencies:
@@ -9,3 +9,4 @@ dependencies:
   - pytest-check-links
   - python=3
   - yarn
+  - jedi=0.17.2
