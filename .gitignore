@@ -4,3 +4,7 @@ node_modules/
 *.egg-info/
 .ipynb_checkpoints
 *.tsbuildinfo
+jupyterlab_completer/__pycache__/
+jupyterlab_completer/labextension/
+package-lock.json
+*.ipynb
